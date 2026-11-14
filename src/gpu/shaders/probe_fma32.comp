@@ -1,0 +1,38 @@
+#version 450
+// FP32 compute peak: 8 independent vec4 FMA chains per invocation.
+// Per loop iteration and invocation: 8 x 4 FMAs = 64 FLOPs.
+// The multiplier and addend come from push constants and the start values
+// differ per invocation, so nothing can be precomputed by the compiler.
+
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) writeonly buffer Dst { vec4 dst[]; };
+
+layout(push_constant) uniform Push {
+  uint iters;
+  float mul;    // e.g. 0.9999999
+  float add;    // e.g. 1e-7
+  float magic;  // result is stored only if it equals this (never, in practice)
+} p;
+
+void main() {
+  const vec4 x = vec4(float(gl_GlobalInvocationID.x) * 1e-9) + vec4(1.0, 1.25, 1.5, 1.75);
+  vec4 a0 = x, a1 = x + 0.1, a2 = x + 0.2, a3 = x + 0.3;
+  vec4 a4 = x + 0.4, a5 = x + 0.5, a6 = x + 0.6, a7 = x + 0.7;
+  const vec4 m = vec4(p.mul);
+  const vec4 c = vec4(p.add);
+  for (uint i = 0u; i < p.iters; ++i) {
+    a0 = fma(a0, m, c);
+    a1 = fma(a1, m, c);
+    a2 = fma(a2, m, c);
+    a3 = fma(a3, m, c);
+    a4 = fma(a4, m, c);
+    a5 = fma(a5, m, c);
+    a6 = fma(a6, m, c);
+    a7 = fma(a7, m, c);
+  }
+  const vec4 s = ((a0 + a1) + (a2 + a3)) + ((a4 + a5) + (a6 + a7));
+  if (s.x == p.magic) {
+    dst[gl_GlobalInvocationID.x] = s;
+  }
+}

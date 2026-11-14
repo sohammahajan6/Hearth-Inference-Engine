@@ -1,0 +1,20 @@
+#version 450
+// The smallest useful compute shader: c[i] = a[i] + 2 * b[i].
+// Used by the Phase 0 GPU smoke test to prove the whole chain works:
+// GLSL -> SPIR-V at build time -> embedded -> pipeline -> dispatch -> readback,
+// with the validation layer watching.
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer A { float a[]; };
+layout(std430, set = 0, binding = 1) readonly buffer B { float b[]; };
+layout(std430, set = 0, binding = 2) writeonly buffer C { float c[]; };
+
+layout(push_constant) uniform Push { uint n; } p;
+
+void main() {
+  const uint i = gl_GlobalInvocationID.x;
+  if (i < p.n) {
+    c[i] = a[i] + 2.0 * b[i];
+  }
+}

@@ -1,0 +1,80 @@
+#version 460
+// The Q8_0 activation quantizer on the GPU, bit-exact with
+// quant::quantize_act_q8_0 and cpu::PackedActs::quantize (ggml's rule):
+//   amax = max |x_j|;  d = fp16(amax / 127);  m = amax != 0 ? 127 / amax : 0;
+//   q_j = roundEven(x_j * m);  s = sum q_j
+// written in the CPU's packed layout (cpu/qgemm.h): per (token, group) 128
+// words, word c * 16 + j holding values 4c .. 4c + 3 of block j, then 16
+// scales and 16 sums. Blocks past the row's end are zero.
+//
+// Exactness: |x|, max, roundEven and a single multiply are exact or correctly
+// rounded in Vulkan; the two divisions and the fp16 rounding use integer
+// arithmetic (quant_common.glsl). The GPU may flush subnormal floats to zero
+// (this driver does), so inputs are read as bits: the block maximum is an
+// integer maximum of |x| bits (order-preserving for non-negative floats), and
+// a subnormal x is multiplied as (mantissa * 2^-24) * m, one rounding, then
+// scaled down by 2^-125 in two exact steps (a result below 2^-126 is a code
+// of 0 either way). Domain: finite inputs whose block maximum is
+// 0 or at least 2^-119, so that both quotients are normal floats. Real
+// activations are far inside it; outside it the CPU's own result involves an
+// infinite multiplier and an undefined float-to-int conversion.
+#extension GL_GOOGLE_include_directive : require
+
+#include "quant_common.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer X { uint x[]; };  // [tokens][k] float bits
+layout(std430, set = 0, binding = 1) writeonly buffer Q { uint q[]; };  // [tokens][groups][128]
+layout(std430, set = 0, binding = 2) writeonly buffer D { float d[]; }; // [tokens][groups][16]
+layout(std430, set = 0, binding = 3) writeonly buffer S { int s[]; };   // [tokens][groups][16]
+
+layout(push_constant) uniform Push {
+  uint tokens;
+  uint groups;
+  uint blocks;  // k / 32
+} p;
+
+void main() {
+  const uint id = gl_GlobalInvocationID.x;  // one invocation per (token, group, block slot)
+  if (id >= p.tokens * p.groups * 16u) return;
+  const uint j = id % 16u;
+  const uint tg = id / 16u;  // token * groups + group
+  const uint g = tg % p.groups;
+  const uint t = tg / p.groups;
+  const uint b = g * 16u + j;
+  const uint qbase = tg * 128u + j;
+  if (b >= p.blocks) {
+    for (uint c = 0u; c < 8u; ++c) q[qbase + c * 16u] = 0u;
+    d[tg * 16u + j] = 0.0;
+    s[tg * 16u + j] = 0;
+    return;
+  }
+  const uint xbase = t * p.blocks * 32u + b * 32u;
+  uint amax_bits = 0u;
+  for (uint v = 0u; v < 32u; ++v) amax_bits = max(amax_bits, x[xbase + v] & 0x7FFFFFFFu);
+  const float amax = uintBitsToFloat(amax_bits);
+  d[tg * 16u + j] = amax_bits != 0u ? half_bits_to_float_q(float_to_half_bits(div_exact(amax, 127.0))) : 0.0;
+  const float m = amax_bits != 0u ? div_exact(127.0, amax) : 0.0;
+  int sum = 0;
+  for (uint c = 0u; c < 8u; ++c) {
+    uint word = 0u;
+    for (uint i = 0u; i < 4u; ++i) {
+      const uint bits = x[xbase + c * 4u + i];
+      precise float prod;
+      if ((bits & 0x7F800000u) == 0u && (bits & 0x7FFFFFu) != 0u) {  // subnormal
+        const float mant = float(bits & 0x7FFFFFu) * 5.9604644775390625e-8;  // exact: mant * 2^-24
+        precise float scaled = ((bits & 0x80000000u) != 0u ? -mant : mant) * m;  // x * m * 2^125, rounded once
+        precise float half_down = scaled * 1.0842021724855044e-19;                 // * 2^-63, exact
+        prod = half_down * 2.168404344971009e-19;                                  // * 2^-62, exact
+      } else {
+        prod = uintBitsToFloat(bits) * m;
+      }
+      const int code = int(roundEven(prod));
+      sum += code;
+      word |= (uint(code) & 0xFFu) << (8u * i);
+    }
+    q[qbase + c * 16u] = word;
+  }
+  s[tg * 16u + j] = sum;
+}

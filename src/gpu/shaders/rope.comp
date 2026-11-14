@@ -1,0 +1,50 @@
+#version 460
+// RoPE of the GPU forward pass (08 doc section 3), in place on rows of
+// `heads` vectors of `head_dim` floats: pair i of token t is rotated by the
+// angle of position p0 + t. The pairs are (2i, 2i+1) (Llama), or with `neox`
+// (i, i + rope_dim/2) (llama.cpp's LLAMA_ROPE_TYPE_NEOX, Qwen2; 15-qwen.md),
+// as cpu::ref::rope pairs them; the angle of pair i is the same either way. The cos/sin table is built on the
+// CPU in double precision, exactly as cpu::ref::rope computes its angles, and
+// the rotation is two multiplies and one add or subtract per value, each
+// rounded (`precise`, no FMA): the CPU reference's bits.
+
+#extension GL_EXT_spirv_intrinsics : require
+spirv_execution_mode(capabilities = [4466], 4461, 32);  // SignedZeroInfNanPreserve, 32-bit
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) buffer X { float x[]; };               // [tokens][stride]
+layout(std430, set = 0, binding = 1) readonly buffer Table { vec2 cs[]; };  // cpu::ref::rope_table: [n_pos][rope_dim / 2]
+
+layout(push_constant) uniform Push {
+  uint tokens;
+  uint heads;
+  uint head_dim;
+  uint rope_dim;
+  uint stride;  // floats per token row
+  uint p0;
+  uint neox;  // 0: pairs (2i, 2i+1); 1: pairs (i, i + rope_dim/2)
+} p;
+
+void main() {
+  const uint half_dim = p.rope_dim / 2u;
+  const uint id = gl_GlobalInvocationID.x;  // (token, head, pair)
+  if (id >= p.tokens * p.heads * half_dim) return;
+  const uint i = id % half_dim;
+  const uint h = (id / half_dim) % p.heads;
+  const uint t = id / (half_dim * p.heads);
+  const vec2 c = cs[(p.p0 + t) * half_dim + i];
+  const uint first = p.neox != 0u ? i : 2u * i;
+  const uint other = p.neox != 0u ? half_dim : 1u;
+  const uint at = t * p.stride + h * p.head_dim + first;
+  const float x0 = x[at];
+  const float x1 = x[at + other];
+  precise float a = x0 * c.x;
+  precise float b = x1 * c.y;
+  precise float e = x0 * c.y;
+  precise float f = x1 * c.x;
+  precise float r0 = a - b;
+  precise float r1 = e + f;
+  x[at] = r0;
+  x[at + other] = r1;
+}

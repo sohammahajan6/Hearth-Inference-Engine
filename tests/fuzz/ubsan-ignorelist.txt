@@ -1,0 +1,5 @@
+# Code whose unsigned wrap-around is intentional (hash functions).
+[unsigned-integer-overflow]
+src:*include/c++/*
+[implicit-integer-truncation]
+src:*include/c++/*

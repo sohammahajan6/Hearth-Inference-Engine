@@ -1,0 +1,5 @@
+#!/bin/sh
+# Git pre-commit hook. Enabled by scripts/setup.ps1, which runs:
+#   git config core.hooksPath scripts/hooks
+# Blocks a commit if formatting is off or the quick tests fail.
+exec pwsh -NoProfile -File scripts/precommit.ps1

@@ -1,0 +1,35 @@
+# Curated clang-tidy checks: bug finders and clear performance mistakes.
+# Style-only and highly opinionated groups are left out on purpose; the
+# compilers' own warnings (MSVC /W4, clang -Wall -Wextra -Wpedantic) plus
+# clang-format cover style. Run with clang-tidy from llvm-mingw.
+# Disabled after calibration on this code base (both were 100% false positives):
+#   bugprone-signed-bitwise: flags `v >> 14` because the literal 14 is signed.
+#   bugprone-invalid-enum-default-initialization: flags Vulkan's standard
+#     `VkXxxCreateInfo info{sType}` zero-initialisation idiom.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-switch-missing-default-case,
+  -bugprone-exception-escape,
+  -bugprone-signed-bitwise,
+  -bugprone-invalid-enum-default-initialization,
+  cert-err58-cpp,
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-analyzer-optin.performance.Padding,
+  concurrency-mt-unsafe,
+  misc-redundant-expression,
+  misc-unused-using-decls,
+  misc-misleading-identifier,
+  modernize-use-nullptr,
+  modernize-use-override,
+  performance-*,
+  -performance-enum-size,
+  readability-container-size-empty,
+  readability-redundant-string-cstr,
+  readability-misleading-indentation
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(src|cli|include|tests)[/\\].*'

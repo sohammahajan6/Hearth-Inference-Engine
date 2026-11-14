@@ -1,0 +1,22 @@
+# Text files are stored and checked out with LF. MSVC, clang and PowerShell 7
+# all accept LF, so one line-ending convention removes a whole class of
+# "file changed but nothing changed" problems on Windows.
+* text=auto eol=lf
+
+# cmd.exe mis-parses labels in LF batch files, so these keep CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Byte-exact fixtures: git must never rewrite these bytes.
+tests/fixtures/** -text -diff
+
+# Binary formats.
+*.gguf binary
+*.spv  binary
+*.png  binary
+*.zip  binary
+*.bin  binary
+
+# Fuzzer seeds and regression inputs are binary.
+tests/fuzz/seeds/** binary
+tests/fuzz/regressions/** binary

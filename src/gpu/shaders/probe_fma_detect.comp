@@ -1,0 +1,20 @@
+#version 460
+// Self-test: does `precise`
+// really keep a * b + c unfused on this driver?
+// With a = b = 1 + 2^-12 and c = -(1 + 2^-11):
+//   unfused: a * b = 1 + 2^-11 + 2^-24 rounds (a tie, to even) to 1 + 2^-11, so the sum is 0;
+//   fused:   the exact a * b + c = 2^-24.
+// The inputs come from a buffer, so the compiler cannot fold them.
+// out[0] (precise) must be 0; out[1] (not precise) shows whether the driver
+// fuses when it is allowed to (information only).
+layout(local_size_x = 1) in;
+layout(std430, set = 0, binding = 0) readonly buffer In { float v[]; };
+layout(std430, set = 0, binding = 1) writeonly buffer Out { float o[]; };
+
+void main() {
+  const float a = v[0], b = v[1], c = v[2];
+  precise float p = a * b + c;
+  float q = a * b + c;
+  o[0] = p;
+  o[1] = q;
+}

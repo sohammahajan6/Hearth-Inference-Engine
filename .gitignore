@@ -1,0 +1,92 @@
+# ---------------------------------------------------------------------------
+# Hearth .gitignore
+# ---------------------------------------------------------------------------
+
+# Build output (scripts/build.ps1, CMake, Ninja, packaging)
+/build/
+/out/
+/install/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+cmake_install.cmake
+compile_commands.json
+.ninja_deps
+.ninja_log
+*.ninja
+
+# Pinned third-party sources and tools (scripts/fetch-deps.ps1 and setup.ps1 recreate them)
+/third_party/
+/data/
+
+# Models: large, separately licensed; fetch with scripts/fetch-models.ps1
+/models/*
+!/models/MODELS.md
+*.gguf
+*.safetensors
+*.bin
+
+# Compiled binaries and debug files
+*.exe
+*.dll
+*.lib
+*.exp
+*.ilk
+*.pdb
+*.obj
+*.o
+*.a
+*.so
+*.spv
+
+# Release archives belong on the GitHub Releases page, not in git
+*.zip
+*.7z
+
+# App runtime state written next to hearth.exe
+hearth-models.txt
+hearth-results.jsonl
+
+# Python
+/.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Benchmark, trace and test scratch output
+/bench/
+/benchmark/
+*.trace.json
+trace*.json
+crash-*
+leak-*
+timeout-*
+oom-*
+*.profraw
+*.profdata
+
+# Fuzz seed corpora and saved regressions are source, keep them
+!/tests/fuzz/**
+
+# Downloads in progress
+*.part
+*.tmp
+
+# Editors and IDEs
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln.docstates
+*.swp
+*~
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Local tool state
+.claude/

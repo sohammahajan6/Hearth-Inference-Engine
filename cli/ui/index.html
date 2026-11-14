@@ -1,0 +1,794 @@
+<!doctype html>
+<!-- The page of `hearth ui`, compiled into
+     hearth.exe. Everything is in this file: no external fonts, scripts or
+     images (the server's Content-Security-Policy forbids them). Text from the
+     model or the user is only ever set with textContent, never as HTML. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #f3f3f1; --panel: #ffffff; --sunk: #f7f7f5; --text: #1b1c1e; --muted: #686c73; --faint: #9a9da3;
+  --line: #e0e0dc; --line-strong: #cfcfca; --accent: #0e7268; --accent-ink: #ffffff; --accent-soft: #e2f1ef;
+  --cpu: #0e7268; --gpu: #9a5a12; --good: #1d7a46; --warn: #9a5a12; --warn-soft: #fbf0de; --bad: #b3261e;
+  --bad-soft: #fbe7e5; --test: #8a4b00; --test-soft: #fdecc8;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101113; --panel: #17181b; --sunk: #1d1f23; --text: #e7e7e4; --muted: #9b9fa7; --faint: #6f737a;
+    --line: #2a2c31; --line-strong: #383b41; --accent: #3cc4b4; --accent-ink: #06201d; --accent-soft: #15302d;
+    --cpu: #3cc4b4; --gpu: #e0a458; --good: #5fcf8f; --warn: #e0a458; --warn-soft: #33270f; --bad: #ff8b80;
+    --bad-soft: #3a1c1a; --test: #f2b65a; --test-soft: #3a2a0d;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+button, select, textarea, input { font: inherit; color: inherit; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.top { display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--panel);
+  border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.mark { width: 12px; height: 12px; background: var(--accent); border-radius: 2px; align-self: center; }
+.brand b { font-size: 16px; letter-spacing: .2px; }
+.job { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px;
+  max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.job.busy .dot { background: var(--warn); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+
+/* tool bar */
+.toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 20px; background: var(--panel);
+  border-bottom: 1px solid var(--line); }
+.toolbar label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px;
+  text-transform: uppercase; letter-spacing: .6px; }
+.toolbar select { min-width: 330px; max-width: 46vw; }
+select, textarea, input[type=number], input[type=text] { background: var(--sunk); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 9px; }
+textarea { width: 100%; resize: vertical; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 6px 14px; cursor: pointer; font-weight: 600; font-size: 13px;
+  color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg button:disabled { cursor: not-allowed; opacity: .45; }
+.chips { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.chip { font: 12px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 7px;
+  background: var(--sunk); white-space: nowrap; }
+.chip b { color: var(--text); font-weight: 600; }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-soft); }
+
+nav { display: flex; gap: 2px; padding: 0 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+nav button { border: 0; background: none; padding: 10px 12px; cursor: pointer; color: var(--muted);
+  border-bottom: 2px solid transparent; font-size: 13.5px; }
+nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px 20px 40px; }
+section[hidden] { display: none; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+.card h2 { font-size: 12px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; font-weight: 600; }
+.card h3 { font-size: 13px; margin: 14px 0 6px; }
+.muted { color: var(--muted); } .small { font-size: 12.5px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; min-width: 180px; }
+.btn { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .45; cursor: default; }
+.notice { padding: 8px 12px; border-radius: 6px; margin: 0 0 12px; font-size: 13px; border: 1px solid transparent; }
+.notice.info { background: var(--accent-soft); }
+.notice.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.notice.bad { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+
+/* chat */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+@media (max-width: 980px) { .split { grid-template-columns: 1fr; } }
+.chat { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 330px); min-height: 280px; overflow-y: auto;
+  padding: 2px 2px 8px; }
+.msg { max-width: 86%; padding: 9px 12px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; background: var(--sunk); border: 1px solid var(--line); }
+.msg.bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.msg.bot.gpu { border-left-color: var(--gpu); }
+.msg .meta { display: block; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line); font: 11.5px/1.5 var(--mono);
+  color: var(--muted); white-space: normal; }
+.msg .meta.err { color: var(--bad); }
+.msg.bot.typing .body::after { content: "\2588"; animation: pulse 1s infinite; margin-left: 1px; color: var(--faint); }
+.empty { margin: auto; text-align: center; color: var(--faint); max-width: 420px; }
+.empty b { display: block; color: var(--muted); font-size: 15px; margin-bottom: 4px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+.opts { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px; }
+.opts label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+
+/* metric lists */
+dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 13px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+dl.kv dd.text { font-family: inherit; }
+.big { display: flex; gap: 10px; margin-bottom: 10px; }
+.big > div { flex: 1; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.big b { display: block; font: 600 22px/1.15 var(--mono); }
+.big span { color: var(--muted); font-size: 11.5px; }
+.meter { height: 6px; background: var(--sunk); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.meter > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.state { font: 600 11px var(--mono); letter-spacing: .6px; text-transform: uppercase; padding: 2px 6px; border-radius: 3px;
+  background: var(--sunk); border: 1px solid var(--line); color: var(--muted); }
+.state.on { color: var(--accent); border-color: var(--accent); }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+td.n, th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.n small { color: var(--faint); }
+.tag { display: inline-block; font: 600 10.5px var(--mono); padding: 1px 6px; border-radius: 3px; letter-spacing: .4px; }
+.tag.cpu { color: var(--cpu); border: 1px solid var(--cpu); }
+.tag.gpu { color: var(--gpu); border: 1px solid var(--gpu); }
+.tag.ok { color: var(--good); border: 1px solid var(--good); }
+.tag.bad { color: var(--bad); border: 1px solid var(--bad); }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.stat { background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; }
+.stat b { display: block; font: 600 19px/1.2 var(--mono); }
+.stat span { color: var(--muted); font-size: 12px; }
+
+/* benchmark */
+.bars { margin: 10px 0 2px; }
+.bar-row { display: grid; grid-template-columns: 60px 1fr 120px; gap: 10px; align-items: center; margin: 5px 0; font-size: 12.5px; }
+.bar-track { background: var(--sunk); border: 1px solid var(--line); border-radius: 3px; height: 16px; overflow: hidden; }
+.bar { height: 100%; }
+.bar.cpu { background: var(--cpu); } .bar.gpu { background: var(--gpu); }
+progress { width: 100%; height: 8px; accent-color: var(--accent); }
+pre.log { background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; max-height: 180px;
+  overflow: auto; font: 11.5px/1.5 var(--mono); white-space: pre-wrap; margin: 10px 0 0; }
+.faq dt { font-weight: 600; margin-top: 10px; } .faq dd { margin: 3px 0 0; color: var(--muted); }
+code { font-family: var(--mono); font-size: 12px; background: var(--sunk); padding: 1px 4px; border-radius: 3px; }
+.overlay { position: fixed; inset: 0; background: rgba(8,10,12,.45); display: grid; place-items: center; z-index: 10; }
+.overlay[hidden] { display: none; }
+.overlay .card { min-width: 300px; text-align: center; }
+.spinner { width: 26px; height: 26px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .9s linear infinite; margin: 4px auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><b>Hearth</b></div>
+  <div class="job" id="job"><i class="dot"></i><span id="job-text">Starting...</span></div>
+  <button class="btn" id="quit" title="Close the app">Quit</button>
+</header>
+<div class="toolbar">
+  <label>Model <select id="model"></select></label>
+  <button class="btn" id="add-model" title="Choose a .gguf model file anywhere on this PC">Add model&hellip;</button>
+  <label>Engine
+    <span class="seg" role="group" aria-label="Engine">
+      <button id="eng-cpu" data-mode="cpu" aria-pressed="true" title="The processor">CPU</button>
+      <button id="eng-gpu" data-mode="gpu" aria-pressed="false" title="The graphics chip (Q8_0 and Q4_0 files)">GPU</button>
+    </span>
+  </label>
+  <div class="chips" id="chips"></div>
+</div>
+<nav role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
+  <button role="tab" data-tab="bench">Benchmark</button>
+  <button role="tab" data-tab="session">Session</button>
+  <button role="tab" data-tab="system">System</button>
+</nav>
+<main>
+  <div id="banner"></div>
+
+  <!-- Chat -->
+  <section id="tab-chat">
+    <div class="split">
+      <div class="card">
+        <div class="chat" id="transcript" aria-live="polite"></div>
+        <div class="composer">
+          <textarea id="input" rows="2" class="grow" placeholder="Message (Enter to send, Shift+Enter for a new line)"></textarea>
+          <button class="btn primary" id="send">Send</button>
+          <button class="btn danger" id="stop" disabled>Stop</button>
+          <button class="btn" id="newchat" title="Forget this conversation">New chat</button>
+        </div>
+        <details>
+          <summary>Generation settings</summary>
+          <div class="opts">
+            <label>Temperature <span class="row"><input type="range" id="temp" min="0" max="1.5" step="0.1" value="0.7"><span id="temp-value" class="mono">0.7</span></span></label>
+            <label>Max reply tokens <input type="number" id="maxtok" min="16" max="4096" value="512"></label>
+            <label class="grow">System prompt (applies from the next new chat)
+              <input type="text" id="sysprompt" placeholder="e.g. Answer briefly and simply.">
+            </label>
+          </div>
+        </details>
+      </div>
+      <aside>
+        <div class="card">
+          <h2>Live <span class="state" id="live-state">idle</span></h2>
+          <div class="big">
+            <div><b id="live-rate">-</b><span>tokens/s writing (live)</span></div>
+            <div><b id="live-count">-</b><span>tokens so far</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Elapsed</dt><dd id="live-elapsed">-</dd>
+            <dt>First token after</dt><dd id="live-ttft">-</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h2>Last reply</h2>
+          <dl class="kv" id="last"></dl>
+          <div class="small muted" style="margin-top:8px">Context <span class="mono" id="ctx-text"></span></div>
+          <div class="meter"><i id="ctx-bar"></i></div>
+        </div>
+        <div class="card">
+          <h2>Engine</h2>
+          <dl class="kv" id="engine"></dl>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Benchmark -->
+  <section id="tab-bench" hidden>
+    <div class="card">
+      <h2>Benchmark</h2>
+      <p class="small muted" style="margin:0 0 12px">Measures the model's two speeds the way <code>hearth bench</code> and llama-bench do:
+        <b>reading</b> one prompt of N tokens in a single pass (prefill), and <b>writing</b> M tokens one at a time (decode).
+        One warm-up, then the chosen number of runs; the median and the range are shown. Keep the charger plugged in and leave the PC alone while it runs.</p>
+      <div class="row">
+        <label class="small muted">Engines
+          <span class="seg" role="group" aria-label="Engines to measure">
+            <button data-b="current" aria-pressed="true" id="b-current">Current</button>
+            <button data-b="both" aria-pressed="false" id="b-both">CPU, then GPU</button>
+          </span>
+        </label>
+        <label class="small muted">Prompt <select id="b-prompt"><option value="128">128 tokens</option><option value="512" selected>512 tokens</option><option value="1024">1024 tokens</option></select></label>
+        <label class="small muted">Write <select id="b-gen"><option value="64">64 tokens</option><option value="128" selected>128 tokens</option><option value="256">256 tokens</option></select></label>
+        <label class="small muted">Runs <select id="b-reps"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="9">9</option></select></label>
+        <span class="grow"></span>
+        <button class="btn primary" id="b-run">Run benchmark</button>
+        <button class="btn danger" id="b-stop" disabled>Stop</button>
+      </div>
+      <div id="b-progress" hidden style="margin-top:12px">
+        <progress id="b-bar" max="1" value="0"></progress>
+        <pre class="log" id="b-log"></pre>
+      </div>
+    </div>
+    <div class="card" id="b-result" hidden></div>
+    <div class="card">
+      <h2>History on this PC</h2>
+      <div id="history"></div>
+    </div>
+  </section>
+
+  <!-- Session -->
+  <section id="tab-session" hidden>
+    <div class="card">
+      <h2>This session</h2>
+      <div class="grid" id="session-stats"></div>
+    </div>
+    <div class="card">
+      <h2>Every reply</h2>
+      <div id="replies"></div>
+    </div>
+  </section>
+
+  <!-- System -->
+  <section id="tab-system" hidden>
+    <div class="split">
+      <div>
+        <div class="card"><h2>Machine</h2><dl class="kv" id="machine"></dl></div>
+        <div class="card"><h2>Models</h2>
+          <div id="models"></div>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="add-path" class="grow" placeholder="Or paste the full path of a .gguf file">
+            <button class="btn" id="add-path-btn">Add</button>
+          </div>
+          <p class="small muted" style="margin:8px 0 0">Added files stay where they are; the app only remembers their paths. Files in a <code>models</code> folder next to hearth.exe are listed automatically.</p>
+        </div>
+      </div>
+      <aside>
+        <div class="card"><h2>App process</h2><dl class="kv" id="process"></dl></div>
+        <div class="card"><h2>Build</h2><dl class="kv" id="build"></dl></div>
+      </aside>
+    </div>
+    <div class="card faq">
+      <h2>About</h2>
+      <dl>
+        <dt>What is this?</dt>
+        <dd>A language-model engine that runs AI models entirely on this PC: nothing you type leaves it, and no internet is needed.</dd>
+        <dt>Which models work?</dt>
+        <dd>GGUF files (the format llama.cpp uses) of the <b>Llama 3</b> family (Llama 3, 3.1, 3.2 and models built on them) and the <b>Qwen2.5</b> family, in the number formats Q8_0, Q4_0, Q4_K_M, Q5_K_M, Q3_K_M, Q2_K, Q5_0, Q5_1, Q4_1, F16, BF16 and F32. Every file in the Models list is checked when it appears: <b>ready</b> runs on the CPU and the GPU, <b>CPU only</b> on the processor, and <b>not supported</b> says why.</dd>
+        <dt>How do I add a model?</dt>
+        <dd>Press <b>Add model&hellip;</b> and choose a <code>.gguf</code> file, or paste its path under System &rarr; Models, or put it in a folder named <code>models</code> next to hearth.exe. Models are on sites such as Hugging Face: search for the model's name with "GGUF". Use each model under its own license.</dd>
+        <dt>CPU or GPU?</dt>
+        <dd>The model runs on one engine at a time. <b>CPU</b> (the processor) is the default. <b>GPU</b> (the graphics chip) runs the whole model through Vulkan; it needs a Q8_0 or Q4_0 file, and its answers can differ slightly from the CPU's in rare near-ties. Use the Benchmark tab to see which is faster on this PC. If the graphics chip fails, the app continues on the CPU and says so.</dd>
+        <dt>What do the numbers mean?</dt>
+        <dd><b>Reading</b> (prefill) is how fast the model takes in your message; <b>writing</b> (decode) is how fast it produces the reply, one token at a time. A token is a piece of a word: a page of English is about 500 to 700 tokens.
+          The <b>draft</b> is a smaller model of the same family that guesses a few words ahead for the main one to check in one pass (speculative decoding); the answers stay the main model's own. Writing mostly waits for memory, so the memory read rate is shown too.</dd>
+        <dt>How do I close the app?</dt>
+        <dd>Press <b>Quit</b>, or close the console window that opened with it. After 10 minutes without any activity it closes by itself.</dd>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="card"><div class="spinner"></div><div id="overlay-text">Loading...</div></div>
+</div>
+
+<script>
+"use strict";
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const $ = (id) => document.getElementById(id);
+let status = null, chatBusy = false, firstStatus = true, closed = false, benchWhich = "current", lastDone = null;
+
+// ---------- helpers ----------
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k === "style") e.style.cssText = v; else e.setAttribute(k, v);
+  }
+  for (const c of children) if (c !== null && c !== undefined) e.append(c instanceof Node ? c : String(c));
+  return e;
+}
+const secs = (s) => s < 1 ? (s * 1000).toFixed(0) + " ms" : s < 10 ? s.toFixed(2) + " s" : s.toFixed(1) + " s";
+const tps = (n, s) => s > 0 && n > 0 ? (n / s).toFixed(1) : "-";
+const gb = (x) => x.toFixed(2) + " GB";
+const engName = (m) => m === "gpu" ? "GPU" : "CPU";
+const STATUS_NOTE = {ok: "", cpu: "  ·  CPU only", unsupported: "  ·  not supported"};
+const STATUS_TAG = {ok: ["ok", "ready"], cpu: ["cpu", "CPU only"], unsupported: ["bad", "not supported"]};
+const KIND = {q8_0: "Q8_0 (8-bit)", q4_0: "Q4_0 (4-bit)", k_quant: "K-quant (Q4_K/Q6_K)", full: "full precision"};
+function kv(box, pairs) {
+  box.replaceChildren(...pairs.flatMap(([k, v, text]) => [el("dt", {}, k), el("dd", text ? {class: "text"} : {}, v)]));
+}
+function banner(kind, text) {
+  const b = $("banner");
+  b.replaceChildren();
+  if (text) b.append(el("div", {class: "notice " + kind}, text));
+}
+function overlay(text) {
+  $("overlay").hidden = !text;
+  if (text) $("overlay-text").textContent = text;
+}
+function appClosed() {
+  if (closed) return;
+  closed = true;
+  overlay(null);
+  document.querySelector("main").replaceChildren(el("div", {class: "card"},
+    el("h2", {}, "The app has closed"),
+    el("p", {class: "muted"}, "Start it again by double-clicking hearth.exe (or \"Hearth.cmd\" in the project folder). You can close this window.")));
+  $("job-text").textContent = "Closed";
+}
+async function api(path, form) {
+  const opts = {method: form ? "POST" : "GET", headers: {"X-Hearth-Token": TOKEN}};
+  if (form) { opts.body = new URLSearchParams(form); opts.headers["Content-Type"] = "application/x-www-form-urlencoded"; }
+  let r;
+  try { r = await fetch(path, opts); } catch (e) { appClosed(); throw e; }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ("request failed (" + r.status + ")"));
+  return data;
+}
+// A POST whose answer is a stream of server-sent events: handlers[name](data).
+async function stream(path, form, handlers) {
+  let r;
+  try {
+    r = await fetch(path, {method: "POST", headers: {"X-Hearth-Token": TOKEN, "Content-Type": "application/x-www-form-urlencoded"},
+      body: new URLSearchParams(form)});
+  } catch (e) { appClosed(); throw e; }
+  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || ("request failed (" + r.status + ")")); }
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const {value, done} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream: true});
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const block = buf.slice(0, i); buf = buf.slice(i + 2);
+      let name = "message", data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event: ")) name = line.slice(7); else if (line.startsWith("data: ")) data += line.slice(6);
+      }
+      if (handlers[name]) handlers[name](data ? JSON.parse(data) : {});
+    }
+  }
+}
+
+// ---------- tabs (the address's #name selects one, so a tab can be bookmarked) ----------
+function showTab(name) {
+  const b = document.querySelector('nav button[data-tab="' + name + '"]');
+  if (!b) return;
+  for (const o of document.querySelectorAll("nav button")) o.setAttribute("aria-selected", String(o === b));
+  for (const s of document.querySelectorAll("main section")) s.hidden = s.id !== "tab-" + name;
+  if (name === "bench") renderHistory();
+}
+for (const b of document.querySelectorAll("nav button")) {
+  b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.tab); showTab(b.dataset.tab); });
+}
+if (location.hash.length > 1) showTab(location.hash.slice(1));
+
+// ---------- status ----------
+function renderStatus() {
+  const s = status, l = s.loaded;
+  const job = $("job");
+  job.classList.toggle("busy", !!s.job);
+  $("job-text").textContent = s.job ? "Working: " + s.job : l ? "Ready" : "No model loaded";
+  // models
+  const sel = $("model");
+  const current = l ? l.model : sel.value;
+  if (sel.options.length !== s.models.length || [...sel.options].some((o, i) => o.value !== s.models[i].path)) {
+    sel.replaceChildren(...s.models.map((m) =>
+      el("option", m.status === "unsupported" ? {value: m.path, disabled: "", title: m.reason} : {value: m.path, title: m.reason || m.path},
+        m.name + "  ·  " + (m.types ? m.types + ", " : "") + m.size_gib.toFixed(2) + " GB" + STATUS_NOTE[m.status])));
+  }
+  if (current) sel.value = current;
+  // engine switch
+  const mode = l ? l.mode : "cpu";
+  for (const b of [$("eng-cpu"), $("eng-gpu")]) b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  const gpuOk = !l || l.gpu_possible;
+  $("eng-gpu").disabled = !!l && !l.gpu_possible;
+  $("eng-gpu").title = gpuOk ? "The graphics chip (Q8_0 and Q4_0 files)"
+    : (s.machine.gpus.length ? "This model file cannot run on the graphics chip (it needs Q8_0 or Q4_0)" : "No usable graphics chip was found");
+  // chips
+  const chips = [];
+  if (l) {
+    chips.push(el("span", {class: "chip"}, "ctx ", el("b", {}, l.context_used + "/" + l.context_size)));
+    if (l.draft) chips.push(el("span", {class: "chip"}, "draft ", el("b", {}, "on")));
+    if (l.gpu_lost) chips.push(el("span", {class: "chip warn"}, "GPU failed: on CPU"));
+  }
+  chips.push(el("span", {class: "chip"}, "RAM ", el("b", {}, s.process.working_set_gib.toFixed(2) + " GB"), " used by app"));
+  const power = s.machine.power;
+  chips.push(el("span", {class: "chip" + (power === "ac" ? "" : " warn")}, power === "ac" ? "AC power" : power === "battery" ? "on battery" : "power unknown"));
+  $("chips").replaceChildren(...chips);
+  // banner
+  if (!s.models.length) {
+    banner("warn", "No model yet. Press \"Add model…\" and choose a .gguf file, or put .gguf files in a folder named \"models\" next to hearth.exe.");
+  } else if (s.build !== "Release") {
+    banner("warn", "This is a " + s.build + " build: it runs much slower than the Release build, and benchmarks are disabled.");
+  } else if (s.machine.power === "battery") {
+    banner("warn", "This PC is on battery. Chat works; plug in the charger for benchmarks.");
+  } else if (s.machine.power !== "ac") {
+    banner("warn", "Windows does not say whether the charger is connected, so benchmarks are turned off. Chat works.");
+  } else if (!$("banner").querySelector(".bad")) {
+    banner("", "");
+  }
+  renderEngine(); renderContext(); renderSystem(); renderSession();
+}
+async function refresh() {
+  if (closed) return;
+  try { status = await api("/api/status"); } catch (e) { return; }
+  renderStatus();
+  if (firstStatus) {
+    firstStatus = false;
+    clearChat();
+    const first = status.models.find((m) => m.status !== "unsupported");
+    if (!status.loaded && first && !status.job) loadModel(first.path, "cpu");
+  }
+}
+function schedule() {
+  setTimeout(async () => { await refresh(); schedule(); }, document.visibilityState === "visible" ? 3000 : 30000);
+}
+
+// ---------- loading ----------
+async function loadModel(path, mode) {
+  overlay("Loading " + path.split(/[\\/]/).pop() + " on the " + (mode === "gpu" ? "graphics chip" : "processor") + "...");
+  try {
+    status = await api("/api/load", {model: path, mode});
+    clearChat();
+    renderStatus();
+    if (mode === "gpu" && status.loaded && status.loaded.mode !== "gpu") banner("warn", status.loaded.label + ".");
+  } catch (e) {
+    banner("bad", "Could not load the model: " + e.message);
+  } finally { overlay(null); }
+}
+const currentMode = () => status && status.loaded ? status.loaded.mode : "cpu";
+$("model").addEventListener("change", () => loadModel($("model").value, currentMode()));
+for (const b of [$("eng-cpu"), $("eng-gpu")]) {
+  b.addEventListener("click", () => {
+    if (chatBusy || b.getAttribute("aria-pressed") === "true" || !$("model").value) return;
+    loadModel($("model").value, b.dataset.mode);
+  });
+}
+
+// ---------- engine and context panels ----------
+function renderEngine() {
+  const l = status.loaded;
+  if (!l) { kv($("engine"), [["Model", "none loaded", true]]); return; }
+  kv($("engine"), [
+    ["Model", l.name, true],
+    ["Engine", engName(l.mode), true],
+    ["Device", l.mode === "gpu" ? l.gpu : status.machine.cpu, true],
+    ["Backend", l.backend],
+    ["Weights", KIND[l.kind] || l.kind, true],
+    ["Draft model", l.draft || "off", true],
+    ["CPU threads", String(status.machine.engine_threads)],
+    ["Load time", secs(l.load_s)]]);
+}
+function renderContext() {
+  const l = status.loaded;
+  const used = l ? l.context_used : 0, size = l ? l.context_size : 0;
+  $("ctx-text").textContent = used + " / " + size + " tokens";
+  $("ctx-bar").style.width = size ? (100 * used / size).toFixed(1) + "%" : "0";
+}
+function renderLast(d) {
+  if (!d) { kv($("last"), [["Waiting for the first reply", "", true]]); return; }
+  const rows = [
+    ["Engine", engName(d.mode), true],
+    ["Prompt", d.prompt_tokens + " tok"],
+    ["Reading", secs(d.prefill_s) + " · " + tps(d.prompt_tokens, d.prefill_s) + " tok/s"],
+    ["Written", d.generated + " tok"],
+    ["Writing", secs(d.decode_s) + " · " + tps(d.generated, d.decode_s) + " tok/s"],
+    ["Total", secs(d.total_s)],
+    ["Stopped by", {end: "end of reply", limit: "length limit", full: "full context", stopped: "Stop button"}[d.stop] || d.stop, true]];
+  if (d.draft_tokens > 0) rows.push(["Draft accepted", d.draft_accepted + "/" + d.draft_tokens + " (" + (100 * d.draft_accepted / d.draft_tokens).toFixed(0) + " %)"]);
+  kv($("last"), rows);
+}
+
+// ---------- chat ----------
+function clearChat() {
+  const l = status && status.loaded;
+  $("transcript").replaceChildren(el("div", {class: "empty", id: "chat-empty"},
+    el("b", {}, l ? l.name : "No model loaded"),
+    l ? "Running on the " + (l.mode === "gpu" ? "graphics chip" : "processor") + ". Ask anything; your words never leave this PC."
+      : "Choose a model file above."));
+}
+function addMsg(kind, text) {
+  const empty = $("chat-empty");
+  if (empty) empty.remove();
+  const m = el("div", {class: "msg " + kind}, text);
+  $("transcript").append(m);
+  $("transcript").scrollTop = $("transcript").scrollHeight;
+  return m;
+}
+function setChatBusy(b) {
+  chatBusy = b;
+  $("send").disabled = b; $("stop").disabled = !b; $("newchat").disabled = b;
+  $("eng-cpu").disabled = b; if (b) $("eng-gpu").disabled = true; else renderStatus();
+  $("model").disabled = b;
+}
+function setLive(state, count, rate, elapsed, ttft) {
+  $("live-state").textContent = state;
+  $("live-state").classList.toggle("on", state !== "idle");
+  $("live-count").textContent = count;
+  $("live-rate").textContent = rate;
+  $("live-elapsed").textContent = elapsed;
+  $("live-ttft").textContent = ttft;
+}
+async function send() {
+  const text = $("input").value.trim();
+  if (!text || chatBusy) return;
+  if (!status || !status.loaded) { banner("warn", "Load a model first."); return; }
+  $("input").value = "";
+  addMsg("user", text);
+  const bot = addMsg("bot typing" + (status.loaded.mode === "gpu" ? " gpu" : ""));
+  const body = el("span", {class: "body"});
+  bot.append(body);
+  setChatBusy(true);
+  let reply = "", count = 0, tFirst = 0;
+  const t0 = performance.now();
+  setLive("reading", "0", "-", "0 ms", "-");
+  const tick = setInterval(() => {
+    const now = performance.now();
+    const rate = count > 1 ? ((count - 1) / ((now - tFirst) / 1000)).toFixed(1) : "-";
+    setLive(count ? "writing" : "reading", String(count), rate, secs((now - t0) / 1000), tFirst ? secs((tFirst - t0) / 1000) : "-");
+  }, 200);
+  try {
+    await stream("/api/chat", {message: text, temperature: $("temp").value, max_tokens: $("maxtok").value, system: $("sysprompt").value}, {
+      token: (d) => {
+        if (!count) tFirst = performance.now();
+        count++;
+        reply += d.text; body.textContent = reply; $("transcript").scrollTop = $("transcript").scrollHeight;
+      },
+      done: (d) => {
+        lastDone = d;
+        renderLast(d);
+        const parts = [engName(d.mode),
+          "in " + d.prompt_tokens + " tok " + secs(d.prefill_s) + " (" + tps(d.prompt_tokens, d.prefill_s) + " tok/s)",
+          "out " + d.generated + " tok " + secs(d.decode_s) + " (" + tps(d.generated, d.decode_s) + " tok/s)"];
+        if (d.draft_tokens > 0) parts.push("draft " + (100 * d.draft_accepted / d.draft_tokens).toFixed(0) + "% kept");
+        if (d.stop !== "end") parts.push({limit: "hit the length limit", full: "context full: start a new chat", stopped: "stopped"}[d.stop] || d.stop);
+        if (d.gpu_lost) parts.push("the graphics chip failed; the CPU took over");
+        bot.append(el("span", {class: "meta"}, parts.join("  │  ")));
+      },
+      error: (d) => bot.append(el("span", {class: "meta err"}, d.message)),
+    });
+  } catch (e) {
+    bot.append(el("span", {class: "meta err"}, e.message));
+  } finally {
+    clearInterval(tick);
+    const now = performance.now();
+    setLive("idle", String(count), lastDone && lastDone.generated ? tps(lastDone.generated, lastDone.decode_s) : "-",
+      secs((now - t0) / 1000), tFirst ? secs((tFirst - t0) / 1000) : "-");
+    bot.classList.remove("typing");
+    if (!reply && !bot.querySelector(".meta")) bot.append(el("span", {class: "meta"}, "(no reply)"));
+    setChatBusy(false);
+    refresh();
+  }
+}
+$("send").addEventListener("click", send);
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("stop").addEventListener("click", () => api("/api/stop", {}).catch(() => {}));
+$("newchat").addEventListener("click", async () => {
+  try { await api("/api/reset", {}); clearChat(); refresh(); } catch (e) { banner("bad", e.message); }
+});
+$("temp").addEventListener("input", () => { $("temp-value").textContent = $("temp").value; });
+
+// ---------- session ----------
+function renderSession() {
+  const r = status.replies || [];
+  const sum = (f) => r.reduce((a, x) => a + f(x), 0);
+  const read = sum((x) => x.prompt_tokens), readS = sum((x) => x.prefill_s);
+  const wrote = sum((x) => x.generated), wroteS = sum((x) => x.decode_s);
+  const drafted = sum((x) => x.draft_tokens), kept = sum((x) => x.draft_accepted);
+  const best = r.reduce((a, x) => Math.max(a, x.decode_s > 0 ? x.generated / x.decode_s : 0), 0);
+  const stat = (big, small) => el("div", {class: "stat"}, el("b", {}, big), el("span", {}, small));
+  $("session-stats").replaceChildren(
+    stat(String(r.length), "replies"),
+    stat(String(read), "tokens read"),
+    stat(String(wrote), "tokens written"),
+    stat(r.length ? tps(read, readS) : "-", "tok/s reading (overall)"),
+    stat(r.length ? tps(wrote, wroteS) : "-", "tok/s writing (overall)"),
+    stat(best ? best.toFixed(1) : "-", "tok/s writing (best reply)"),
+    stat(r.length ? secs(readS + wroteS) : "-", "model time"),
+    stat(drafted ? (100 * kept / drafted).toFixed(0) + " %" : "-", "draft tokens kept"));
+  const rb = $("replies");
+  if (!r.length) { rb.replaceChildren(el("p", {class: "muted"}, "No replies yet in this session.")); return; }
+  const cols = ["#", "Engine", "Prompt", "Reading", "tok/s", "Written", "Writing", "tok/s", "Draft kept"];
+  const head = el("tr", {}, ...cols.map((h, i) => el("th", {class: i >= 2 ? "n" : ""}, h)));
+  const body = r.map((x, i) => el("tr", {}, el("td", {}, String(i + 1)),
+    el("td", {}, el("span", {class: "tag " + x.mode}, engName(x.mode))),
+    el("td", {class: "n"}, String(x.prompt_tokens)), el("td", {class: "n"}, secs(x.prefill_s)),
+    el("td", {class: "n"}, tps(x.prompt_tokens, x.prefill_s)),
+    el("td", {class: "n"}, String(x.generated)), el("td", {class: "n"}, secs(x.decode_s)),
+    el("td", {class: "n"}, tps(x.generated, x.decode_s)),
+    el("td", {class: "n"}, x.draft_tokens ? (100 * x.draft_accepted / x.draft_tokens).toFixed(0) + " %" : "-")));
+  rb.replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, ...body.reverse())));
+}
+
+// ---------- benchmark ----------
+for (const b of [$("b-current"), $("b-both")]) {
+  b.addEventListener("click", () => {
+    benchWhich = b.dataset.b;
+    for (const o of [$("b-current"), $("b-both")]) o.setAttribute("aria-pressed", String(o === b));
+  });
+}
+const range = (lo, hi) => el("small", {}, " " + lo.toFixed(1) + "–" + hi.toFixed(1));
+function renderBench(d) {
+  const box = $("b-result");
+  box.hidden = false;
+  const max = (f) => Math.max(...d.runs.map(f), 1e-9);
+  const bars = (title, f) => {
+    const m = max(f);
+    return [el("div", {class: "small", style: "margin-top:8px;font-weight:600"}, title),
+      ...d.runs.map((r) => el("div", {class: "bar-row"}, el("span", {class: "muted"}, engName(r.backend)),
+        el("div", {class: "bar-track"}, el("div", {class: "bar " + r.backend, style: "width:" + (100 * f(r) / m).toFixed(1) + "%"})),
+        el("span", {class: "num", style: "text-align:right"}, f(r).toFixed(1) + " tok/s")))];
+  };
+  const head = el("tr", {}, ...["Engine", "Device", "Reading tok/s", "Writing tok/s", "Memory read while writing"].map((h, i) =>
+    el("th", {class: i >= 2 ? "n" : ""}, h)));
+  const rows = d.runs.map((r) => el("tr", {}, el("td", {}, el("span", {class: "tag " + r.backend}, engName(r.backend))),
+    el("td", {class: "small"}, r.device, el("br"), el("span", {class: "muted"}, r.engine)),
+    el("td", {class: "n"}, r.pp_tps.toFixed(1), range(r.pp_tps_min, r.pp_tps_max)),
+    el("td", {class: "n"}, r.tg_tps.toFixed(1), range(r.tg_tps_min, r.tg_tps_max)),
+    el("td", {class: "n"}, r.decode_gbps.toFixed(1) + " GB/s")));
+  const notes = [];
+  if (d.runs.length === 2) {
+    const [c, g] = d.runs;
+    notes.push("GPU relative to CPU: reading " + (g.pp_tps / c.pp_tps).toFixed(2) + "×, writing " + (g.tg_tps / c.tg_tps).toFixed(2) +
+      "×. Measured one after the other, not interleaved: heat and background programs can shift either side.");
+  }
+  if (d.reps === 1) notes.push("One run per test: there is no range to judge the noise by. Choose 3 or more runs for numbers worth quoting.");
+  box.replaceChildren(el("h2", {}, "Result"),
+    el("div", {class: "small muted", style: "margin-bottom:8px"}, d.model + " · reading " + d.prompt_tokens + " tokens, writing " +
+      d.gen_tokens + " · median of " + d.reps + " run" + (d.reps > 1 ? "s" : "") + " (range in grey) · " + d.threads + " CPU threads · " + d.date),
+    el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)),
+    el("div", {class: "bars"}, ...bars("Reading (prefill)", (r) => r.pp_tps), ...bars("Writing (decode)", (r) => r.tg_tps)),
+    ...notes.map((t) => el("p", {class: "small muted", style: "margin:6px 0 0"}, t)));
+}
+$("b-run").addEventListener("click", async () => {
+  if (!status || !status.loaded) { banner("warn", "Load a model first."); return; }
+  $("b-run").disabled = true; $("b-stop").disabled = false;
+  $("b-progress").hidden = false; $("b-bar").value = 0;
+  const log = $("b-log");
+  log.textContent = "";
+  const add = (t) => { log.textContent += t + "\n"; log.scrollTop = log.scrollHeight; };
+  try {
+    await stream("/api/bench", {backends: benchWhich, prompt_tokens: $("b-prompt").value, gen_tokens: $("b-gen").value, reps: $("b-reps").value}, {
+      progress: (d) => { add(d.text); if (d.total) $("b-bar").value = d.done / d.total; },
+      result: (d) => { $("b-bar").value = 1; add("Done. The chat was cleared: the benchmark used the context."); renderBench(d); clearChat(); renderHistory(); },
+      error: (d) => { add("Error: " + d.message); banner("bad", d.message); },
+      stopped: (d) => { add(d.message); clearChat(); },
+    });
+  } catch (e) { add("Error: " + e.message); banner("bad", e.message); }
+  finally { $("b-run").disabled = false; $("b-stop").disabled = true; refresh(); }
+});
+$("b-stop").addEventListener("click", () => api("/api/stop", {}).catch(() => {}));
+async function renderHistory() {
+  let rows = [];
+  try { rows = await api("/api/history"); } catch (e) { return; }
+  const box = $("history");
+  if (!rows.length) { box.replaceChildren(el("p", {class: "muted"}, "No benchmarks yet. Results are saved in hearth-results.jsonl next to hearth.exe.")); return; }
+  const head = el("tr", {}, ...["Date", "Model", "Test", "Engine", "Reading tok/s", "Writing tok/s", "GB/s"].map((h, i) =>
+    el("th", {class: i >= 4 ? "n" : ""}, h)));
+  const body = [];
+  for (const d of rows.slice().reverse()) {
+    for (const r of d.runs) {
+      body.push(el("tr", {}, el("td", {class: "mono small"}, d.date), el("td", {class: "small"}, d.model),
+        el("td", {class: "mono small"}, "pp" + d.prompt_tokens + " tg" + d.gen_tokens + " ×" + d.reps),
+        el("td", {}, el("span", {class: "tag " + r.backend}, engName(r.backend))),
+        el("td", {class: "n"}, r.pp_tps.toFixed(1)), el("td", {class: "n"}, r.tg_tps.toFixed(1)),
+        el("td", {class: "n"}, r.decode_gbps.toFixed(1))));
+    }
+  }
+  box.replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, ...body)));
+}
+
+// ---------- system ----------
+function renderSystem() {
+  const s = status, m = s.machine, p = s.process;
+  kv($("machine"), [
+    ["Processor", m.cpu, true],
+    ["Cores / threads", m.cores + " / " + m.threads],
+    ["AVX-512 (int8 dot products)", m.avx512 ? "yes" : "no"],
+    ["Threads used by the engine", String(m.engine_threads)],
+    ["Graphics", m.gpus.length ? m.gpus.join("; ") : "no usable Vulkan GPU", true],
+    ["Memory", gb(m.memory_gib) + " total, " + gb(m.memory_free_gib) + " free"],
+    ["Power", m.power === "ac" ? "AC (plugged in)" : m.power === "battery" ? "battery" : "unknown", true]]);
+  kv($("process"), [
+    ["Working set", gb(p.working_set_gib)],
+    ["Committed memory", gb(p.commit_gib)],
+    ["Uptime", secs(s.uptime_s)],
+    ["Job", s.job || "idle", true]]);
+  kv($("build"), [["Version", s.version], ["Build", s.build], ["Commit", s.commit]]);
+  const mb = $("models");
+  if (!s.models.length) { mb.replaceChildren(el("p", {class: "muted"}, "No model files yet. Press \"Add model…\".")); return; }
+  const head = el("tr", {}, ...["File", "Family", "Number format", "Size", "Status", ""].map((h, i) => el("th", {class: i === 3 ? "n" : ""}, h)));
+  mb.replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, ...s.models.map((x) => {
+    const [cls, text] = STATUS_TAG[x.status] || ["bad", x.status];
+    const forget = x.added ? el("button", {class: "btn small", "data-forget": x.path}, "Remove") : "";
+    return el("tr", {}, el("td", {class: "small", title: x.path}, x.name), el("td", {class: "small"}, x.arch || "-"),
+      el("td", {class: "small"}, x.types || "-"), el("td", {class: "n"}, x.size_gib.toFixed(2) + " GB"),
+      el("td", {class: "small"}, el("span", {class: "tag " + cls}, text), x.reason ? el("div", {class: "muted"}, x.reason) : ""),
+      el("td", {}, forget));
+  }))));
+}
+
+// ---------- adding models ----------
+function added(d) {
+  if (d.cancelled) return;
+  if (d.status === "unsupported") { banner("warn", d.name + " was added, but it cannot run: " + d.reason); refresh(); return; }
+  banner("", "");
+  loadModel(d.path, "cpu");
+}
+$("add-model").addEventListener("click", async () => {
+  $("add-model").disabled = true;
+  try { added(await api("/api/pick", {})); } catch (e) { banner("bad", "Could not add the model: " + e.message); }
+  finally { $("add-model").disabled = false; }
+});
+$("add-path-btn").addEventListener("click", async () => {
+  const path = $("add-path").value.trim();
+  if (!path) return;
+  try { added(await api("/api/add", {model: path})); $("add-path").value = ""; } catch (e) { banner("bad", "Could not add the model: " + e.message); }
+});
+$("models").addEventListener("click", async (e) => {
+  const path = e.target.getAttribute && e.target.getAttribute("data-forget");
+  if (!path) return;
+  try { await api("/api/forget", {model: path}); refresh(); } catch (err) { banner("bad", err.message); }
+});
+
+// ---------- quit ----------
+$("quit").addEventListener("click", async () => {
+  try { await api("/api/quit", {}); } catch (e) { /* closing anyway */ }
+  appClosed();
+});
+
+renderLast(null);
+refresh().then(schedule);
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+#version 460
+// Q8_0 GEMV in the canonical order of ADR 0009, on the CPU's packed bytes
+// (cpu/qgemm.h); docs/architecture/08-gpu-backend.md section 2.
+//
+// One subgroup of 8 invocations computes one row. Invocation i holds lanes i
+// and i + 8 of the 16 lanes, so the first halving step (lane j + lane j+8)
+// is a local add and the next three are shuffles. Every FP32 multiply and add
+// of steps 2-5 is `precise` and written inline (glslang does not carry
+// `precise` into helper functions), and signed zeros are preserved.
+
+#extension GL_EXT_integer_dot_product : require
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_EXT_spirv_intrinsics : require
+
+// SignedZeroInfNanPreserve for 32-bit floats (capability 4466, execution mode
+// 4461): the driver may not fold +0 + t into t.
+spirv_execution_mode(capabilities = [4466], 4461, 32);
+
+layout(constant_id = 0) const uint SUBGROUPS = 8;  // rows per workgroup
+layout(local_size_x_id = 1) in;                     // = 8 * SUBGROUPS, set by the host
+
+// Weights: [rows][groups] x 128 words (8 chunks of 16 words; word j = block j),
+// bytes stored as q + 128. Scales: [rows][groups][16] fp16.
+layout(std430, set = 0, binding = 0) readonly buffer WQ { uint wq[]; };
+layout(std430, set = 0, binding = 1) readonly buffer WD { uint16_t wd[]; };
+// Activations of one token: [groups] x 128 words, and [groups][16] scales and sums.
+layout(std430, set = 0, binding = 2) readonly buffer XQ { uint xq[]; };
+layout(std430, set = 0, binding = 3) readonly buffer XD { float xd[]; };
+layout(std430, set = 0, binding = 4) writeonly buffer Y { float y[]; };
+
+layout(push_constant) uniform Push {
+  uint rows;
+  uint groups;
+  uint row_begin;
+} p;
+
+// fp16 bits to float with integer operations: exact for every input, and
+// independent of the denormal mode (a subnormal is m * 2^-24, exact in FP32).
+float half_bits_to_float(uint h) {
+  const uint s = (h & 0x8000u) << 16;
+  const uint e = (h >> 10) & 0x1Fu;
+  const uint m = h & 0x3FFu;
+  if (e == 0u) return uintBitsToFloat(floatBitsToUint(float(m) * 5.9604644775390625e-8) | s);
+  if (e == 31u) return uintBitsToFloat(s | (m == 0u ? 0x7F800000u : (0x7FC00000u | (m << 13))));
+  return uintBitsToFloat(s | ((e + 112u) << 23) | (m << 13));
+}
+
+void main() {
+  const uint inv = gl_SubgroupInvocationID;  // 0..7: lanes inv and inv + 8
+  const uint row = p.row_begin + gl_WorkGroupID.x * SUBGROUPS + gl_SubgroupID;
+  const bool live = row < p.rows;  // out-of-range rows still reach the shuffles
+  const uint r = live ? row : 0u;
+  precise float acc0 = 0.0;
+  precise float acc1 = 0.0;
+  for (uint g = 0u; g < p.groups; ++g) {
+    const uint wbase = (r * p.groups + g) * 128u;
+    const uint xbase = g * 128u;
+    int i0 = 0;
+    int i1 = 0;
+    for (uint c = 0u; c < 8u; ++c) {
+      // word ^ 0x80808080 turns the +128-offset bytes back into signed weights.
+      i0 += dotPacked4x8EXT(int(wq[wbase + c * 16u + inv] ^ 0x80808080u), int(xq[xbase + c * 16u + inv]));
+      i1 += dotPacked4x8EXT(int(wq[wbase + c * 16u + inv + 8u] ^ 0x80808080u), int(xq[xbase + c * 16u + inv + 8u]));
+    }
+    const uint sbase = (r * p.groups + g) * 16u;
+    precise float s0 = half_bits_to_float(uint(wd[sbase + inv])) * xd[g * 16u + inv];
+    precise float s1 = half_bits_to_float(uint(wd[sbase + inv + 8u])) * xd[g * 16u + inv + 8u];
+    precise float t0 = float(i0) * s0;
+    precise float t1 = float(i1) * s1;
+    acc0 = acc0 + t0;
+    acc1 = acc1 + t1;
+  }
+  precise float h = acc0 + acc1;               // lane j + lane j+8
+  h = h + subgroupShuffleDown(h, 4u);          // + 4
+  h = h + subgroupShuffleDown(h, 2u);          // + 2
+  h = h + subgroupShuffleDown(h, 1u);          // + 1
+  if (live && inv == 0u) y[row] = h;
+}

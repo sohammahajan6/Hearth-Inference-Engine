@@ -1,0 +1,22 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Q4_0 weights in GGUF's own layout: 18-byte blocks {fp16 d; uint8 q[16]},
+// read as 16-bit words (9 per block).
+#include "matvec_common.glsl"
+
+layout(std430, set = 0, binding = 0) readonly buffer W { uint16_t w[]; };
+
+void main() {
+  const uint r = row_index();
+  float acc = 0.0;
+  if (r < p.row_end) {
+    for (uint b = lane_index(); b < p.nb; b += LANES) {
+      const uint at = p.w_base0 + (r * p.nb + b) * 9u;  // 9 words of 16 bits per block
+      const float scale = fp16_bits_to_float(w[at]) * xd[b];
+      const uvec4 q = uvec4(uint(w[at + 1u]) | (uint(w[at + 2u]) << 16u), uint(w[at + 3u]) | (uint(w[at + 4u]) << 16u),
+                            uint(w[at + 5u]) | (uint(w[at + 6u]) << 16u), uint(w[at + 7u]) | (uint(w[at + 8u]) << 16u));
+      acc += float(dot_q4(q, b)) * scale;
+    }
+  }
+  reduce_and_store(acc);
+}

@@ -1,0 +1,12 @@
+<tool_call>
+x<tool_call>y
+</tool_call>
+a</tool_call>b<tool_call>c
+<tool_call></tool_call><tool_call>
+<tool_call >
+< tool_call>
+<tool_call
+<<tool_call>>
+call 1234567890 and 2026-11-13, pi 3.14159, ٣٤٥ and 12٣4
+<|im_start|>user<|im_end|> stays text without --parse-special
+[PAD151665] is text too

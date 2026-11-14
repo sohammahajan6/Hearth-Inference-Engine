@@ -1,0 +1,8 @@
+POST /api/chat HTTP/1.1
+Host: 127.0.0.1:8080
+Origin: http://127.0.0.1:8080
+X-Hetero-Token: 0123456789abcdef0123456789abcdef
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 54
+
+message=What+is+the+capital0.000000&temperature=0.7&x=

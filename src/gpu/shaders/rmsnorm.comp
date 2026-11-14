@@ -1,0 +1,47 @@
+#version 460
+// RMSNorm of the GPU forward pass (docs/architecture/08-gpu-backend.md
+// section 3): out = x * (1 / sqrt(mean(x^2) + eps)) * w, one workgroup per
+// token. The sum of squares is reduced in a fixed order that does not depend
+// on the number of tokens, so prefill and decode give the same bits. The
+// CPU reference sums in double; this FP32 tree is within the ACCEPTANCE
+// element-wise bar (|d| <= 1e-5 |ref| + 1e-6), checked by gpu_ops_test.
+
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer X { float x[]; };   // [tokens][n]
+layout(std430, set = 0, binding = 1) readonly buffer W { float w[]; };   // [n]
+layout(std430, set = 0, binding = 2) writeonly buffer O { float o[]; };  // [tokens][n]
+
+layout(push_constant) uniform Push {
+  uint n;
+  float eps;
+} p;
+
+shared float partial[256];
+
+void main() {
+  const uint t = gl_WorkGroupID.x;
+  const uint lid = gl_LocalInvocationID.x;
+  const uint base = t * p.n;
+  precise float s = 0.0;
+  for (uint i = lid; i < p.n; i += 256u) {
+    precise float sq = x[base + i] * x[base + i];
+    s = s + sq;
+  }
+  partial[lid] = s;
+  barrier();
+  for (uint half_ = 128u; half_ > 0u; half_ >>= 1u) {
+    if (lid < half_) {
+      precise float sum = partial[lid] + partial[lid + half_];
+      partial[lid] = sum;
+    }
+    barrier();
+  }
+  const float mean = partial[0] / float(p.n);
+  const float scale = 1.0 / sqrt(mean + p.eps);
+  for (uint i = lid; i < p.n; i += 256u) {
+    precise float v = x[base + i] * scale;
+    precise float r = v * w[i];
+    o[base + i] = r;
+  }
+}

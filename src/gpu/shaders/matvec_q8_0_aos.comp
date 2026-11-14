@@ -1,0 +1,26 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Q8_0 weights in GGUF's own layout: 34-byte blocks {fp16 d; int8 q[32]}.
+// Blocks are only 2-byte aligned, so the weights are read as 16-bit words
+// (17 per block) and reassembled into 32-bit words for the dot product.
+#include "matvec_common.glsl"
+
+layout(std430, set = 0, binding = 0) readonly buffer W { uint16_t w[]; };
+
+uvec4 words(uint at) {
+  return uvec4(uint(w[at]) | (uint(w[at + 1u]) << 16u), uint(w[at + 2u]) | (uint(w[at + 3u]) << 16u),
+               uint(w[at + 4u]) | (uint(w[at + 5u]) << 16u), uint(w[at + 6u]) | (uint(w[at + 7u]) << 16u));
+}
+
+void main() {
+  const uint r = row_index();
+  float acc = 0.0;
+  if (r < p.row_end) {
+    for (uint b = lane_index(); b < p.nb; b += LANES) {
+      const uint at = p.w_base0 + (r * p.nb + b) * 17u;  // 17 words of 16 bits per block
+      const float scale = fp16_bits_to_float(w[at]) * xd[b];
+      acc += float(dot_q8(words(at + 1u), words(at + 9u), b)) * scale;
+    }
+  }
+  reduce_and_store(acc);
+}

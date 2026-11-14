@@ -1,0 +1,37 @@
+#version 450
+// int8 dot-product peak: 8 independent chains of acc += dot(int8x4, int8x4).
+// Each dotPacked4x8EXT is 4 multiply-adds = 8 ops, so 64 ops per iteration.
+// The first operand is the accumulator itself (reinterpreted as 4 bytes), so
+// every step depends on the previous one and cannot be hoisted out of the loop.
+
+#extension GL_EXT_integer_dot_product : require
+
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) writeonly buffer Dst { int dst[]; };
+
+layout(push_constant) uniform Push {
+  uint iters;
+  int b;      // second operand, packed int8x4
+  int magic;  // result is stored only if it equals this (never, in practice)
+} p;
+
+void main() {
+  const int base = int(gl_GlobalInvocationID.x * 2654435761u);
+  int a0 = base, a1 = base ^ 0x11111111, a2 = base ^ 0x22222222, a3 = base ^ 0x33333333;
+  int a4 = base ^ 0x44444444, a5 = base ^ 0x55555555, a6 = base ^ 0x66666666, a7 = base ^ 0x77777777;
+  for (uint i = 0u; i < p.iters; ++i) {
+    a0 += dotPacked4x8EXT(a0, p.b);
+    a1 += dotPacked4x8EXT(a1, p.b);
+    a2 += dotPacked4x8EXT(a2, p.b);
+    a3 += dotPacked4x8EXT(a3, p.b);
+    a4 += dotPacked4x8EXT(a4, p.b);
+    a5 += dotPacked4x8EXT(a5, p.b);
+    a6 += dotPacked4x8EXT(a6, p.b);
+    a7 += dotPacked4x8EXT(a7, p.b);
+  }
+  const int s = (a0 ^ a1) ^ (a2 ^ a3) ^ (a4 ^ a5) ^ (a6 ^ a7);
+  if (s == p.magic) {
+    dst[gl_GlobalInvocationID.x] = s;
+  }
+}

@@ -1,0 +1,25 @@
+#version 460
+// The Q/K/V bias add of the GPU forward pass (Qwen2; docs/architecture/
+// 15-qwen.md): x[t][j] = x[t][j] + b[j] for each token row t of `width`
+// floats, one correctly rounded FP32 add each, as LlamaRef adds them (and
+// ggml's ggml_add): the CPU reference's bits.
+
+#extension GL_EXT_spirv_intrinsics : require
+spirv_execution_mode(capabilities = [4466], 4461, 32);  // SignedZeroInfNanPreserve, 32-bit
+
+layout(local_size_x = 256) in;
+
+layout(std430, set = 0, binding = 0) buffer X { float x[]; };          // [tokens][width]
+layout(std430, set = 0, binding = 1) readonly buffer B { float b[]; };  // [width]
+
+layout(push_constant) uniform Push {
+  uint n;      // tokens * width
+  uint width;
+} p;
+
+void main() {
+  const uint i = gl_GlobalInvocationID.x;
+  if (i >= p.n) return;
+  precise float s = x[i] + b[i % p.width];
+  x[i] = s;
+}

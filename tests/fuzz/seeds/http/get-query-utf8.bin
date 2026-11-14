@@ -1,0 +1,2 @@
+GET /api/status?a=%E2%9C%94&b=x+y HTTP/1.0
+

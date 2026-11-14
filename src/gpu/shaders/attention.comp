@@ -1,0 +1,97 @@
+#version 460
+// Causal attention of the GPU forward pass (08 doc section 3): one workgroup
+// per (token, query head). Token t of a chunk that starts at position p0
+// attends to positions 0 .. p0 + t of the KV cache:
+//   score_s = (q . k_s) * scale    the dot in increasing dimension order
+//   p_s     = exp(score_s - max) / sum_s exp(score_s - max)
+//   out     = sum_s p_s v_s        in increasing position order
+// The scores live in a global scratch buffer (not shared memory), so the
+// context is not limited by the 32 KiB of shared memory. The max and the sum
+// are reduced in a fixed order, the same for any number of tokens, so prefill
+// and decode give the same bits. The CPU reference sums the normaliser in
+// double, and exp is not correctly rounded on the GPU: the results are within
+// the ACCEPTANCE bars, checked by gpu_ops_test. GQA: query head h reads kv
+// head h / (heads / kv_heads).
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Q { float q[]; };    // [tokens][heads * head_dim]
+layout(std430, set = 0, binding = 1) readonly buffer K { float k[]; };    // [n_ctx][kv_heads * head_dim], one layer
+layout(std430, set = 0, binding = 2) readonly buffer V { float v[]; };    // [n_ctx][kv_heads * head_dim], one layer
+layout(std430, set = 0, binding = 3) buffer Scores { float sc[]; };       // [tokens * heads][n_ctx]
+layout(std430, set = 0, binding = 4) writeonly buffer O { float o[]; };  // [tokens][heads * head_dim]
+
+layout(push_constant) uniform Push {
+  uint p0;
+  uint heads;
+  uint kv_heads;
+  uint head_dim;
+  uint n_ctx;
+  float scale;
+} p;
+
+shared float red[64];
+
+void main() {
+  const uint task = gl_WorkGroupID.x;  // token * heads + head
+  const uint h = task % p.heads;
+  const uint t = task / p.heads;
+  const uint kvh = h / (p.heads / p.kv_heads);
+  const uint lid = gl_LocalInvocationID.x;
+  const uint len = p.p0 + t + 1u;
+  const uint qbase = t * p.heads * p.head_dim + h * p.head_dim;
+  const uint kvw = p.kv_heads * p.head_dim;
+  const uint sbase = task * p.n_ctx;
+
+  // 1. Scores and their maximum.
+  float m = -3.402823466e38;
+  for (uint s = lid; s < len; s += 64u) {
+    const uint kb = s * kvw + kvh * p.head_dim;
+    precise float dot = 0.0;
+    for (uint d = 0u; d < p.head_dim; ++d) {
+      precise float prod = q[qbase + d] * k[kb + d];
+      dot = dot + prod;
+    }
+    precise float score = dot * p.scale;
+    sc[sbase + s] = score;
+    m = max(m, score);
+  }
+  red[lid] = m;
+  barrier();
+  for (uint w = 32u; w > 0u; w >>= 1u) {
+    if (lid < w) red[lid] = max(red[lid], red[lid + w]);
+    barrier();
+  }
+  m = red[0];
+  barrier();
+
+  // 2. exp(score - max) and their sum.
+  precise float sum = 0.0;
+  for (uint s = lid; s < len; s += 64u) {
+    const float e = exp(sc[sbase + s] - m);
+    sc[sbase + s] = e;
+    sum = sum + e;
+  }
+  red[lid] = sum;
+  memoryBarrierBuffer();
+  barrier();
+  for (uint w = 32u; w > 0u; w >>= 1u) {
+    if (lid < w) {
+      precise float r = red[lid] + red[lid + w];
+      red[lid] = r;
+    }
+    barrier();
+  }
+  const float inv = 1.0 / red[0];
+
+  // 3. The weighted sum of the values, one output dimension per invocation.
+  for (uint d = lid; d < p.head_dim; d += 64u) {
+    precise float acc = 0.0;
+    for (uint s = 0u; s < len; ++s) {
+      precise float pr = sc[sbase + s] * inv;
+      precise float prod = pr * v[s * kvw + kvh * p.head_dim + d];
+      acc = acc + prod;
+    }
+    o[qbase + d] = acc;
+  }
+}

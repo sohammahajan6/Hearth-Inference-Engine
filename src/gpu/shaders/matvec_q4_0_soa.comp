@@ -1,0 +1,21 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Q4_0 weights repacked: fp16 scales in binding 0, quants in binding 1
+// (16 bytes = 1 uvec4 per block, 16-byte aligned).
+#include "matvec_common.glsl"
+
+layout(std430, set = 0, binding = 0) readonly buffer WD { uint16_t wd[]; };
+layout(std430, set = 0, binding = 1) readonly buffer WQ { uvec4 wq[]; };
+
+void main() {
+  const uint r = row_index();
+  float acc = 0.0;
+  if (r < p.row_end) {
+    for (uint b = lane_index(); b < p.nb; b += LANES) {
+      const uint blk = r * p.nb + b;
+      const float scale = fp16_bits_to_float(wd[p.w_base0 + blk]) * xd[b];
+      acc += float(dot_q4(wq[p.w_base1 + blk], b)) * scale;
+    }
+  }
+  reduce_and_store(acc);
+}

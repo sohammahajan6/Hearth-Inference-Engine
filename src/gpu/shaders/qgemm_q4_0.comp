@@ -1,0 +1,147 @@
+#version 460
+// Q4_0 GEMM (prefill: several tokens) in the canonical order of ADR 0009, on
+// the CPU's packed bytes (cpu/qgemm.h); docs/architecture/08-gpu-backend.md
+// section 2.
+//
+// One subgroup of 8 invocations computes a tile of R rows x C tokens. As in
+// qgemv_q4_0.comp, invocation i holds lanes i and i + 8 of the 16 lanes of
+// every (row, token) pair of the tile. Each weight word is loaded once and
+// used for the C tokens, each activation word once for the R rows. Every
+// (row, token) pair takes exactly the GEMV's steps, in the same order:
+//   isum (exact int32) -> s = d_w * d_x -> t = float(isum) * s -> acc = acc + t
+// per group, then the halving tree. So GEMM, GEMV and the CPU give the same
+// bits for any R, C and any position of a pair in its tile. Every FP32
+// multiply and add is `precise` and written inline; signed zeros are kept.
+
+#extension GL_EXT_integer_dot_product : require
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_EXT_spirv_intrinsics : require
+
+// SignedZeroInfNanPreserve for 32-bit floats (capability 4466, execution mode 4461).
+spirv_execution_mode(capabilities = [4466], 4461, 32);
+
+layout(constant_id = 0) const uint SUBGROUPS = 4;  // tiles per workgroup (along the rows)
+layout(local_size_x_id = 1) in;                     // = 8 * SUBGROUPS, set by the host
+layout(constant_id = 2) const uint R = 2;           // rows per tile
+layout(constant_id = 3) const uint C = 2;           // tokens per tile
+
+// Weights: [rows][groups] x 64 words (4 chunks of 16 nibble words). Scales: [rows][groups][16] fp16.
+layout(std430, set = 0, binding = 0) readonly buffer WQ { uint wq[]; };
+layout(std430, set = 0, binding = 1) readonly buffer WD { uint16_t wd[]; };
+// Activations: [tokens][groups] x 128 words, and [tokens][groups][16] scales and code sums.
+layout(std430, set = 0, binding = 2) readonly buffer XQ { uint xq[]; };
+layout(std430, set = 0, binding = 3) readonly buffer XD { float xd[]; };
+layout(std430, set = 0, binding = 4) readonly buffer XS { int xs[]; };
+// y[t * ldy + r].
+layout(std430, set = 0, binding = 5) writeonly buffer Y { float y[]; };
+
+layout(push_constant) uniform Push {
+  uint rows;
+  uint groups;
+  uint row_begin;
+  uint tokens;
+  uint ldy;
+} p;
+
+// fp16 bits to float with integer operations: exact for every input, and
+// independent of the denormal mode (a subnormal is m * 2^-24, exact in FP32).
+float half_bits_to_float(uint h) {
+  const uint s = (h & 0x8000u) << 16;
+  const uint e = (h >> 10) & 0x1Fu;
+  const uint m = h & 0x3FFu;
+  if (e == 0u) return uintBitsToFloat(floatBitsToUint(float(m) * 5.9604644775390625e-8) | s);
+  if (e == 31u) return uintBitsToFloat(s | (m == 0u ? 0x7F800000u : (0x7FC00000u | (m << 13))));
+  return uintBitsToFloat(s | ((e + 112u) << 23) | (m << 13));
+}
+
+void main() {
+  const uint inv = gl_SubgroupInvocationID;  // 0..7: lanes inv and inv + 8
+  // Token tiles are the fast dispatch dimension (x), so the workgroups that run
+  // together share weight rows, which then come from cache, not DRAM, for every
+  // token tile; the activations (tokens x k bytes) stay in cache too.
+  const uint row0 = p.row_begin + (gl_WorkGroupID.y * SUBGROUPS + gl_SubgroupID) * R;
+  const uint tok0 = gl_WorkGroupID.x * C;
+  // Out-of-range rows and tokens read row/token 0 and are not stored: every
+  // invocation reaches the shuffles.
+  uint rr[R];
+  uint tt[C];
+  for (uint i = 0u; i < R; ++i) rr[i] = row0 + i < p.rows ? row0 + i : 0u;
+  for (uint c = 0u; c < C; ++c) tt[c] = tok0 + c < p.tokens ? tok0 + c : 0u;
+  precise float acc0[R * C];
+  precise float acc1[R * C];
+  for (uint k = 0u; k < R * C; ++k) {
+    acc0[k] = 0.0;
+    acc1[k] = 0.0;
+  }
+  for (uint g = 0u; g < p.groups; ++g) {
+    // isum = sum of n * x - 8 * sum of x; the nibbles (0..15) are valid signed bytes.
+    int i0[R * C];
+    int i1[R * C];
+    for (uint i = 0u; i < R; ++i) {
+      for (uint c = 0u; c < C; ++c) {
+        const uint sx = (tt[c] * p.groups + g) * 16u;
+        i0[i * C + c] = -8 * xs[sx + inv];
+        i1[i * C + c] = -8 * xs[sx + inv + 8u];
+      }
+    }
+    for (uint m = 0u; m < 4u; ++m) {
+      // Low nibbles are values 4m.. (activation chunk m), high nibbles 16 + 4m.. (chunk m + 4).
+      uint xl0[C];
+      uint xl1[C];
+      uint xh0[C];
+      uint xh1[C];
+      for (uint c = 0u; c < C; ++c) {
+        const uint xbase = (tt[c] * p.groups + g) * 128u;
+        xl0[c] = xq[xbase + m * 16u + inv];
+        xl1[c] = xq[xbase + m * 16u + inv + 8u];
+        xh0[c] = xq[xbase + (m + 4u) * 16u + inv];
+        xh1[c] = xq[xbase + (m + 4u) * 16u + inv + 8u];
+      }
+      for (uint i = 0u; i < R; ++i) {
+        const uint wbase = (rr[i] * p.groups + g) * 64u + m * 16u;
+        const uint w0 = wq[wbase + inv];
+        const uint w1 = wq[wbase + inv + 8u];
+        const int l0 = int(w0 & 0x0F0F0F0Fu);
+        const int h0 = int((w0 >> 4) & 0x0F0F0F0Fu);
+        const int l1 = int(w1 & 0x0F0F0F0Fu);
+        const int h1 = int((w1 >> 4) & 0x0F0F0F0Fu);
+        for (uint c = 0u; c < C; ++c) {
+          i0[i * C + c] += dotPacked4x8EXT(l0, int(xl0[c]));
+          i0[i * C + c] += dotPacked4x8EXT(h0, int(xh0[c]));
+          i1[i * C + c] += dotPacked4x8EXT(l1, int(xl1[c]));
+          i1[i * C + c] += dotPacked4x8EXT(h1, int(xh1[c]));
+        }
+      }
+    }
+    for (uint i = 0u; i < R; ++i) {
+      const uint sbase = (rr[i] * p.groups + g) * 16u;
+      const float dw0 = half_bits_to_float(uint(wd[sbase + inv]));
+      const float dw1 = half_bits_to_float(uint(wd[sbase + inv + 8u]));
+      for (uint c = 0u; c < C; ++c) {
+        const uint sx = (tt[c] * p.groups + g) * 16u;
+        const uint k = i * C + c;
+        precise float s0 = dw0 * xd[sx + inv];
+        precise float s1 = dw1 * xd[sx + inv + 8u];
+        precise float t0 = float(i0[k]) * s0;
+        precise float t1 = float(i1[k]) * s1;
+        precise float a0 = acc0[k] + t0;
+        precise float a1 = acc1[k] + t1;
+        acc0[k] = a0;
+        acc1[k] = a1;
+      }
+    }
+  }
+  for (uint i = 0u; i < R; ++i) {
+    for (uint c = 0u; c < C; ++c) {
+      const uint k = i * C + c;
+      precise float h = acc0[k] + acc1[k];         // lane j + lane j+8
+      h = h + subgroupShuffleDown(h, 4u);          // + 4
+      h = h + subgroupShuffleDown(h, 2u);          // + 2
+      h = h + subgroupShuffleDown(h, 1u);          // + 1
+      if (inv == 0u && row0 + i < p.rows && tok0 + c < p.tokens) y[(tok0 + c) * p.ldy + row0 + i] = h;
+    }
+  }
+}

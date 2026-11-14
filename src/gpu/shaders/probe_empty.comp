@@ -1,0 +1,16 @@
+#version 450
+// Does (almost) nothing: measures the fixed cost of a dispatch, a submit and
+// a wake-up. The store happens only if `magic` names a real invocation, which
+// the probe never does.
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) writeonly buffer Dst { uint dst[]; };
+
+layout(push_constant) uniform Push { uint magic; } p;
+
+void main() {
+  if (gl_GlobalInvocationID.x == p.magic) {
+    dst[0] = 1u;
+  }
+}
