@@ -26,7 +26,7 @@ if (-not (Test-Path $quantize)) { throw "llama-quantize not found at $quantize. 
 # Hugging Face cache stays on E: (C: holds the pagefile and TEMP).
 $env:HF_HOME = Join-Path $root 'third_party\hf-home'
 
-# Derived files per set. Their sha256 values are recorded in models/MODELS.md.
+# Derived files per set. Their sha256 values are pinned in scripts/pins.psd1.
 # A type with a recipe suffix (Q4_K_M) is llama-quantize's own mixture of
 # types, made without --pure and named without "-pure": that is what K-quant
 # files look like in practice (Q4_K_M: Q4_K, with Q6_K for token_embd and half

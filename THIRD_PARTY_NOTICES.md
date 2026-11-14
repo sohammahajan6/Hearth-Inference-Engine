@@ -14,7 +14,7 @@ Every dependency here is free of charge, and the inventory records each one's li
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | vulkan-sdk-1.4.363.0 | Apache-2.0 OR MIT | Vulkan API declarations |
 | Tables derived from the Unicode Character Database | 15.1.0 | Unicode License V3 (text below) | The tokenizer's letter, number and whitespace classes (`src/tokenizer/unicode_tables.cpp`, generated) |
 
-Requirement for the release package (Phase 8): include the license texts of volk and Vulkan-Headers, and the Unicode License V3 notice. MIT requires the copyright notice to travel with redistributed copies, and the Unicode license requires its notice to appear with the data or in its documentation.
+Requirement for the release package: include the license texts of volk and Vulkan-Headers, and the Unicode License V3 notice. MIT requires the copyright notice to travel with redistributed copies, and the Unicode license requires its notice to appear with the data or in its documentation.
 
 ## Test-only (never shipped)
 | Component | Version | License | Use |
@@ -54,7 +54,7 @@ Requirement for the release package (Phase 8): include the license texts of volk
 | Item | Source | License |
 |------|--------|---------|
 | Llama-3.2-1B-Instruct and Llama-3.2-3B-Instruct (GGUF BF16, and the derived F32/Q8_0/Q4_0) | `unsloth/*-GGUF` on Hugging Face (ungated mirror), pinned revision | **Llama 3.2 Community License.** Free of charge, with Meta's Acceptable Use Policy. Anyone redistributing the model must show "Built with Llama". The license also has a 700M-monthly-users clause. |
-| Qwen2.5-0.5B-Instruct (GGUF F16, and the derived F32/Q8_0/Q4_0) | `Qwen/Qwen2.5-0.5B-Instruct-GGUF` on Hugging Face (Qwen's own repository, ungated), pinned revision | **Apache-2.0** (the model card's license). Free, including commercial use; keep the license and notices when redistributing. Used for the Qwen stretch goal. |
+| Qwen2.5-0.5B-Instruct (GGUF F16, and the derived F32/Q8_0/Q4_0) | `Qwen/Qwen2.5-0.5B-Instruct-GGUF` on Hugging Face (Qwen's own repository, ungated), pinned revision | **Apache-2.0** (the model card's license). Free, including commercial use; keep the license and notices when redistributing.|
 | WikiText-2 (raw) | `ggml-org/ci` dataset on Hugging Face, pinned revision | CC BY-SA 3.0 (Merity et al., 2016). Used only for perplexity evaluation. |
 | Unicode Character Database 15.1.0: `UnicodeData.txt`, `PropList.txt` | `https://www.unicode.org/Public/15.1.0/ucd/`, pinned by sha256 | **Unicode License V3**, free of charge. `tools/gen_unicode_tables.py` derives the tokenizer's letter, number and White_Space tables from these files; the generated `src/tokenizer/unicode_tables.cpp` is committed. The license requires its copyright and permission notice to appear with the data or in its documentation; it is reproduced below. |
 
